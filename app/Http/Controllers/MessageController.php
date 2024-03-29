@@ -4,15 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Message;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class MessageController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Message $message)
     {
-        //
+        $messages = $message::all();
+
+        return view('read-message', ['messages' => $messages]);
     }
 
     /**
@@ -20,7 +23,7 @@ class MessageController extends Controller
      */
     public function create()
     {
- 
+        return view('write-message');
     }
 
     /**
@@ -28,43 +31,47 @@ class MessageController extends Controller
      */
     public function store(Request $request)
     {
-        dd('Triggerd?');
-        Message::create([
-           'message' => $request('message'),
-           'recipient' => $request('recipient'),
-           'decryption_key' => $request('decryption_key'),
+        $validated = $request->validate([
+            'message' => 'required|string|max:255',
+            'recipient' => 'required',
+            'decryption_key' => 'required'
         ]);
+
+        Message::create([
+            'user_id' => auth()->id(),
+            'sender' => Auth::user()->name,
+            'message' => $validated['message'],
+            'recipient' => $validated['recipient'],
+            'decryption_key' => $validated['decryption_key'],
+        ]);
+
+        return redirect()->route('message.create')->with('message', 'Your message has been sent!');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(Message $message)
+    public function show(Message $message, Request $request)
     {
-        //
-    }
+        if ($message::where('decryption_key', $request->input('decryption_key'))->where('recipient', Auth::user()->name)->exists()) {
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Message $message)
-    {
-        //
-    }
+            $secret_message = $message::where('decryption_key', $request->input('decryption_key'))->where('recipient', Auth::user()->name)->get();
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Message $message)
-    {
-        //
+            return view('show-message', ['secret_message' => $secret_message]);
+        } else {
+            return redirect()->route('message.index')->with('message', 'You are not authorized to view this message');
+        }
+
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Message $message)
+    public function destroy(Message $message, $id)
     {
-        //
+        $delete_message = $message::where('id', $id);
+        $delete_message->delete();
+
+        return redirect()->route('message.index');
     }
 }
